@@ -6,6 +6,9 @@ The classes are:
 3. **FaQA_Pipeline** : Only QA in Persian
 """
 
+import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0' # Goal: Disable oneDNN optimizations in TensorFlow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Goal: Reduce the level of TensorFlow logs and warnings
 
 from transformers import (
     AutoModelForQuestionAnswering,
@@ -55,68 +58,70 @@ class FaSummarizationPipeline:
 
 
 class FaQA_Pipeline:
-    """
-    Wrapper class for parsbert-persian-QA.
-    It only does QA in Persian.
-    Example:
-    >>> pipe = FaQA_Pipeline()
-    >>> context = "..."
-    >>> question = "..."
-    >>> output = pipe.QA(context, question)
-    """
     def __init__(self, model_name='mansoorhamidzadeh/parsbert-persian-QA'):
         self.model_name = model_name
-        # Load the model and tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForQuestionAnswering.from_pretrained(model_name)
-
-        # Create a QA pipeline
         self.qa_pipeline = pipeline(
-            "question-answering", model=self.model, tokenizer=self.tokenizer)
+            "question-answering", 
+            model=self.model, 
+            tokenizer=self.tokenizer
+        )
 
     def QA(self, context: str, question: str) -> str:
-        pass
+        result = self.qa_pipeline(question=question, context=context)
+        return result['answer']
 
 
 class EnPipeline:
-    """
-    Wrapper class for flan-t5.
-    It can do both summarization and QA in English.
-    Example 1:
-    >>> pipe = EnPipeline()
-    >>> text = "..."
-    >>> output1 = pipe.summarize(text)
-    Example 2:
-    >>> pipe = EnPipeline()
-    >>> question , context = "..." , "..."
-    >>> output2 = pipe.QA(context, question)
-    """
     def __init__(self, model_name='google/flan-t5-small'):
         self.model_name = model_name
-        # Load the model and tokenizer
-        self.tokenizer = T5Tokenizer.from_pretrained(model_name)
+        self.tokenizer = T5Tokenizer.from_pretrained(model_name, legacy=False) 
         self.model = T5ForConditionalGeneration.from_pretrained(model_name)
 
-    """Tokenizes the input text, Generates the output, Decodes the output."""
-    def _generate(self, input_text, input_max_length, model_max_length, num_beams, length_penalty):
-        # Tokenize the input text
+    def _generate(self, input_text, input_max_length=512, model_max_length=200, num_beams=5, length_penalty=0.7):
         input_ids = self.tokenizer(
-            input_text, return_tensors="pt", max_length=input_max_length, truncation=True).input_ids
-        # Generate the output
+            input_text, 
+            return_tensors="pt", 
+            max_length=input_max_length, 
+            truncation=True
+        ).input_ids
+        
         outputs = self.model.generate(
             input_ids,
-            max_length=model_max_length,  # max length of output
-            length_penalty=length_penalty,  # more penalty means less length
-            num_beams=num_beams  # more beams takes more time but better output
+            max_length=model_max_length,
+            length_penalty=length_penalty,
+            num_beams=num_beams
         )
-        # Decode the output
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-    def summarize(self, input_text: str, input_max_length=256,
-                  model_max_length=256,
-                  num_beams=5,
-                  length_penalty=1.0) -> str:
-        pass
+    def QA(self, context: str, question: str) -> str:
+        input_text = f"question: {question} context: {context}"
+        return self._generate(input_text)
 
-    def QA(self, context: str, question: str)->str:
-        pass
+# if __name__ == "__main__":
+#     # Test Persian QA
+#     print("\nTesting Persian QA:")
+#     fa_qa = FaQA_Pipeline()
+#     persian_context = """
+#     شرکت گوگل در سال ۱۹۹۸ توسط لری پیج و سرگئی برین تأسیس شد. 
+#     این شرکت در ابتدا به عنوان یک موتور جستجو شروع به کار کرد 
+#     اما امروزه محصولات متنوعی از جمله سیستم عامل اندروید، 
+#     مرورگر کروم و سرویس ابری گوگل درایو را ارائه می‌دهد.
+#     """
+#     persian_question = "بنیانگذاران گوگل چه کسانی هستند؟"
+#     print(f"Answer: {fa_qa.QA(persian_context, persian_question)}")
+#     # output = لری پیج و سرگئی برین
+
+#     # Test English QA
+#     print("\nTesting English QA:")
+#     en_qa = EnPipeline()
+#     english_context = """
+#     The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France. 
+#     It is named after the engineer Gustave Eiffel, whose company designed and built the tower.
+#     Constructed in 1889, it was initially criticized by some of France's leading artists 
+#     and intellectuals for its design, but it has become a global cultural icon of France.
+#     """
+#     english_question = "Who designed the Eiffel Tower?"
+#     print(f"Answer: {en_qa.QA(english_context, english_question)}")
+#     # output = Gustave Eiffel
