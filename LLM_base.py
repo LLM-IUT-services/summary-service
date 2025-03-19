@@ -6,7 +6,7 @@ The classes are:
 3. **FaQA_Pipeline** : Only QA in Persian
 """
 
-
+import speech_recognition as sr
 from transformers import (
     AutoModelForQuestionAnswering,
     T5ForConditionalGeneration,
@@ -120,3 +120,37 @@ class EnPipeline:
 
     def QA(self, context: str, question: str)->str:
         pass
+
+
+r = sr.Recognizer()
+r.pause_threshold = 0.5  # Reduce latency between conversations
+
+def speech_to_text():
+    with sr.Microphone() as source2:  # open mic
+        r.adjust_for_ambient_noise(source2, duration=1)  # Noise adjustment with sufficient time
+
+        while True:
+            try:
+                print("Listening...")  
+                audio2 = r.listen(source2)
+
+            # persion test
+                try:
+                    mytext = r.recognize_google(audio2, language="fa-IR")
+                    return mytext
+                    print("Recognized (FA):", mytext)
+                    continue
+                except sr.UnknownValueError:
+                    pass 
+
+            # english test
+                try:
+                    mytext = r.recognize_google(audio2, language="en-US")
+                    return mytext
+                    print("Recognized (EN):", mytext)
+                    continue
+                except sr.UnknownValueError:
+                    print("Could not recognize speech in any language")
+        
+            except sr.RequestError as e:
+                print("Could not request results; {0}".format(e))
