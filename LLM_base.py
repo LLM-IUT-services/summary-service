@@ -103,7 +103,7 @@ class EnPipeline:
         self.model = T5ForConditionalGeneration.from_pretrained(model_name)
 
     """Tokenizes the input text, Generates the output, Decodes the output."""
-    def _generate(self, input_text, input_max_length, model_max_length, num_beams, length_penalty):
+    def _generate(self, input_text, input_max_length,model_max_length, num_beams, length_penalty,repetition_penalty,no_repeat_ngram_size,min_length):
         # Tokenize the input text
         input_ids = self.tokenizer(
             input_text, return_tensors="pt", max_length=input_max_length, truncation=True).input_ids
@@ -113,9 +113,11 @@ class EnPipeline:
             input_ids,
             max_length=model_max_length,  # max length of output
             length_penalty=length_penalty,  # more penalty means less length
-            num_beams=num_beams  # more beams takes more time but better output
-        )
-        # Decode the output
+            num_beams=num_beams,  # more beams takes more time but better output
+            repetition_penalty=repetition_penalty,
+            no_repeat_ngram_size=no_repeat_ngram_size,
+            min_length=min_length
+    )
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
     
     def _preprocess_function(examples, tokenizer, max_input_length=512, max_target_length=128):
@@ -204,6 +206,7 @@ class EnPipeline:
         torch.save(self.model.state_dict(), model_path)  # Save only weights
 
 
+<<<<<<< HEAD
     def summarize(self, input_text: str, input_max_length=256,
                   model_max_length=256,
                   num_beams=5,
@@ -223,6 +226,16 @@ class EnPipeline:
                 self._trainDataForSummarizing()
 
             return self._generate(input_text, input_max_length, model_max_length, num_beams, length_penalty)
+=======
+    def summarize(self, input_text: str, input_max_length=256,min_length=30,
+              model_max_length=512,
+              num_beams=10,
+              length_penalty=1,
+              repetition_penalty=1.5,
+              no_repeat_ngram_size=2) -> str:
+      input_text = f"Summarize the following text, focusing on the main points and highlight the imporatant details:{input_text}" 
+      return self._generate(input_text, input_max_length, model_max_length, num_beams, length_penalty, repetition_penalty, no_repeat_ngram_size, min_length)
+>>>>>>> f407b39 (complete summarize method in EnPipeline class)
 
 
 
