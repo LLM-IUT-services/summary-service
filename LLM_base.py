@@ -1,4 +1,4 @@
-""" # LLM wrapper classes
+﻿""" # LLM wrapper classes
 This module contains the **wrapper classes for the LLMs**.
 The classes are:
 1. **EnPipeline** : Both summarization and QA in English
@@ -7,6 +7,8 @@ The classes are:
 """
 
 import speech_recognition as sr
+import whisper
+import torch
 from transformers import (
     AutoModelForQuestionAnswering,
     T5ForConditionalGeneration,
@@ -15,6 +17,9 @@ from transformers import (
     AutoTokenizer,
     pipeline,
 )
+
+recognizer = sr.Recognizer()
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class FaSummarizationPipeline:
@@ -122,35 +127,24 @@ class EnPipeline:
         pass
 
 
-r = sr.Recognizer()
-r.pause_threshold = 0.5  # Reduce latency between conversations
+
+def support_speech_to_text():
+    model = whisper.load_model("large").to(device)  #"small" / "large"
+    result = model.transcribe("audio.mp3")
+    print(result["text"])
+    return result["text"] 
 
 def speech_to_text():
-    with sr.Microphone() as source2:  # open mic
-        r.adjust_for_ambient_noise(source2, duration=1)  # Noise adjustment with sufficient time
+    # خواندن فایل صوتی
+    with sr.AudioFile("audio.wav") as source:
+        audio = recognizer.record(source)
 
-        while True:
-            try:
-                print("Listening...")  
-                audio2 = r.listen(source2)
-
-            # persion test
-                try:
-                    mytext = r.recognize_google(audio2, language="fa-IR")
-                    return mytext
-                    print("Recognized (FA):", mytext)
-                    continue
-                except sr.UnknownValueError:
-                    pass 
-
-            # english test
-                try:
-                    mytext = r.recognize_google(audio2, language="en-US")
-                    return mytext
-                    print("Recognized (EN):", mytext)
-                    continue
-                except sr.UnknownValueError:
-                    print("Could not recognize speech in any language")
-        
-            except sr.RequestError as e:
-                print("Could not request results; {0}".format(e))
+    try:
+        text = recognizer.recognize_google(audio, language="fa-IR")
+        print("text:", text)
+        return text
+    except sr.UnknownValueError:
+        print("Google Speech Recognition could not understand the audio")
+    except sr.RequestError as e:
+        print(f"Could not request results from Google Speech Recognition service; {e}")
+        return support_speech_to_text()
