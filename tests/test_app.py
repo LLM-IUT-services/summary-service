@@ -1,28 +1,32 @@
-import unittest
-import json
-from app import app
+import pytest
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-class APITestCase(unittest.TestCase):
-    def setUp(self):
-        self.app = app.test_client()
-        self.app.testing = True
+from app import app 
 
-    def test_summarize(self):
-        response = self.app.post('/api/summarize', 
-                                 data=json.dumps({'text': 'This is a test text.'}),
-                                 content_type='application/json')
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('summary', json.loads(response.data))
+@pytest.fixture
+def client():
+    app.config['TESTING'] = True
+    with app.test_client() as client:
+        yield client
 
-    def test_qa(self):
-        response = self.app.post('/api/qa', 
-                                 data=json.dumps({'question': 'What is AI?', 'context': 'AI stands for Artificial Intelligence.'}),
-                                 content_type='application/json')
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('answer', json.loads(response.data))
+def test_summarize_text(client):
+    response = client.post('/api/summarize', json={"text": "Flask is a micro web framework."})
+    assert response.status_code == 200
+    assert "summary" in response.get_json()
 
-    # def test_event_report(self):
-      
+def test_summarize_text_missing_field(client):
+    response = client.post('/api/summarize', json={})
+    assert response.status_code == 400
+    assert "error" in response.get_json()
 
-if __name__ == '__main__':
-    unittest.main()
+def test_answer_question(client):
+    response = client.post('/api/qa', json={"question": "Who built the Eiffel Tower?", "context": "The Eiffel Tower was designed by Gustave Eiffel."})
+    assert response.status_code == 200
+    assert "answer" in response.get_json()
+
+def test_answer_question_missing_field(client):
+    response = client.post('/api/qa', json={"question": "Who built the Eiffel Tower?"})
+    assert response.status_code == 400
+    assert "error" in response.get_json()
