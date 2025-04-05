@@ -9,5 +9,6 @@ pytest
 flask-swagger-ui
 flasgger
 sentencepiece
-
+SpeechRecognition
+openai-whisper
 --extra-index-url https://download.pytorch.org/whl/cpu
