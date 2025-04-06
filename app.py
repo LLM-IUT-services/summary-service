@@ -4,9 +4,10 @@ import pandas as pd
 from werkzeug.utils import secure_filename
 from LLM_base import EnPipeline, FaSummarizationPipeline, FaQA_Pipeline
 from flasgger import Swagger
+from event import process_event_file 
 
 app = Flask(__name__)
-swagger = Swagger(app)  # Auto-generates OpenAPI docs
+swagger = Swagger(app)  
 
 en_pipeline = EnPipeline()
 fa_summarizer = FaSummarizationPipeline()
@@ -36,6 +37,11 @@ def summarize_text():
               type: integer
               default: 100
               description: Maximum length of the summary
+            lang:
+              type: string
+              enum: [en, fa]
+              default: en
+              description: Language of the text (English or Persian)
     responses:
       200:
         description: A summarized version of the text
@@ -50,14 +56,21 @@ def summarize_text():
         description: Internal Server Error
     """
     data = request.get_json()
-    if not data or 'text' not in data:
-        return jsonify({"error": "Missing 'text' field"}), 400
+    if not data or 'text' not in data or 'lang' not in data:
+        return jsonify({"error": "Missing 'text' or 'lang' field"}), 400
 
     text = data['text']
+    lang = data['lang']
     max_length = data.get('max_length', 100)
 
     try:
-        summary = en_pipeline.summarize(text, model_max_length=max_length)
+        if lang == 'en':
+            summary = en_pipeline.summarize(text, model_max_length=max_length)
+        elif lang == 'fa':
+            summary = fa_summarizer.summarize(text, model_max_length=max_length)
+        else:
+            return jsonify({"error": "Invalid language. Use 'en' or 'fa'"}), 400
+
         return jsonify({"summary": summary}), 200
     except Exception as e:
         return jsonify({"error": f"Summarization failed: {str(e)}"}), 500
@@ -80,6 +93,11 @@ def answer_question():
             context:
               type: string
               description: The context for the question
+            lang:
+              type: string
+              enum: [en, fa]
+              default: en
+              description: Language of the question and context (English or Persian)
     responses:
       200:
         description: The answer to the question
@@ -94,14 +112,21 @@ def answer_question():
         description: Internal Server Error
     """
     data = request.get_json()
-    if not data or 'question' not in data or 'context' not in data:
-        return jsonify({"error": "Missing 'question' or 'context' field"}), 400
+    if not data or 'question' not in data or 'context' not in data or 'lang' not in data:
+        return jsonify({"error": "Missing 'question', 'context', or 'lang' field"}), 400
 
     question = data['question']
     context = data['context']
+    lang = data['lang']
 
     try:
-        answer = en_pipeline.QA(context, question)
+        if lang == 'en':
+            answer = en_pipeline.QA(context, question)
+        elif lang == 'fa':
+            answer = fa_qa.QA(context, question)
+        else:
+            return jsonify({"error": "Invalid language. Use 'en' or 'fa'"}), 400
+
         return jsonify({"answer": answer}), 200
     except Exception as e:
         return jsonify({"error": f"QA failed: {str(e)}"}), 500
@@ -145,16 +170,8 @@ def process_event_report():
     file.save(file_path)
 
     try:
-        if filename.endswith('.csv'):
-            df = pd.read_csv(file_path)
-        elif filename.endswith('.xlsx'):
-            df = pd.read_excel(file_path)
-        else:
-            return jsonify({"error": "Unsupported file format"}), 400
-
-        text = " ".join(df.astype(str).values.flatten())
-        summary = fa_summarizer.summarize(text)
-        return jsonify({"event_summary": summary}), 200
+        result = process_event_file(file_path)
+        return jsonify({"event_summary": result}), 200
 
     except Exception as e:
         return jsonify({"error": f"Failed to process event file: {str(e)}"}), 500
