@@ -40,7 +40,8 @@ def process_event_file(file_path):
         return df  
 
     # Convert dataframe to text
-    text = " ".join(df.astype(str).values.flatten())
+    prefix = 'متن داده شده حاصل استخراج اطلاعات از سند داده شده است:'
+    text =   prefix + " ".join(df.astype(str).values.flatten())
 
     # Generate summary
     summary = generate_summary(text)

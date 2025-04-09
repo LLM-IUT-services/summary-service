@@ -5,9 +5,11 @@ from werkzeug.utils import secure_filename
 from LLM_base import EnPipeline, FaSummarizationPipeline, FaQA_Pipeline
 from flasgger import Swagger
 from event import process_event_file 
+from flask_cors import CORS
 
 app = Flask(__name__)
 swagger = Swagger(app)  
+CORS(app)
 
 en_pipeline = EnPipeline()
 fa_summarizer = FaSummarizationPipeline()
