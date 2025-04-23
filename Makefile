@@ -14,6 +14,13 @@ install:
 	@echo "[+] Activating virtual environment and installing requirements..."
 	@$(VENV_DIR)/bin/pip install --upgrade pip
 	@$(VENV_DIR)/bin/pip install -r requirements.txt
+	@mkdir -p /models/fa 
+	@mkdir -p /models/en 
+	@wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip  
+	@wget https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip 
+	@unzip vosk-model-small-fa-0.42.zip -d models/fa/ 
+	@unzip vosk-model-small-en-us-0.15.zip -d models/en/
+	@rm  vosk-model-small-fa-0.42.zip vosk-model-small-en-us-0.15.zip
 	@$(VENV_DIR)/bin/huggingface-cli login --token $(HUGGINGFACE_API_KEY)
 
 run:

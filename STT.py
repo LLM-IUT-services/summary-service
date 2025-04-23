@@ -1,28 +1,74 @@
-import speech_recognition as sr
-import whisper
-import torch
+""" # STT wrapper class
+This class is a wrapper for Vosk STT library.
+It can transcribe audio files in Persian and English.
+It uses Vosk models for Persian and English.
+It can also apply some basic audio enhancements.
+## Usage:
+>>> persian_stt = SpeechToText(lang="fa")  # or "en" for english
+>>> with open("audio.mp3", "rb") as f:
+>>>       text = persian_stt.transcribe_mp3_fileobj(f)
+>>> print(text)
+"""
 
-recognizer = sr.Recognizer()
-device = "cuda" if torch.cuda.is_available() else "cpu"
+import os
+import wave
+import json
+from io import BytesIO
+from pydub import AudioSegment
+from vosk import Model, KaldiRecognizer, SetLogLevel
+
+SetLogLevel(-1)  # no log for vosk
 
 
-def support_speech_to_text():
-    model = whisper.load_model("large").to(device)  #"small" / "large"
-    result = model.transcribe("audio.mp3")
-    print(result["text"])
-    return result["text"] 
+class SpeechToText:
+    def __init__(self, lang: str, model_size: str = 'small'):
+        model_dir = 'models/' + lang
+        if lang == 'fa':
+            model_dir += '/vosk-model-small-fa-0.42'
+        elif lang == 'en':
+            model_dir += '/vosk-model-small-en-us-0.15'
+        if not os.path.exists(model_dir):
+            raise FileNotFoundError(
+                f"Model directory '{model_dir}' not found.")
 
-def speech_to_text():
-    # خواندن فایل صوتی
-    with sr.AudioFile("audio.wav") as source:
-        audio = recognizer.record(source)
+        self.model = Model(model_dir)
 
-    try:
-        text = recognizer.recognize_google(audio, language="fa-IR")
-        print("text:", text)
-        return text
-    except sr.UnknownValueError:
-        print("Google Speech Recognition could not understand the audio")
-    except sr.RequestError as e:
-        print(f"Could not request results from Google Speech Recognition service; {e}")
-        return support_speech_to_text()
+    def transcribe_mp3_fileobj(self, file_obj, max_alternatives: int = 0) -> str:
+        # Convert MP3 file-like object to WAV in memory
+        audio = AudioSegment.from_file(file_obj, format="mp3")
+        audio = audio.set_channels(1).set_frame_rate(16000)
+
+        # Optional: Apply audio enhancements (normalization, noise reduction)
+        audio = audio.normalize()
+        audio = audio.low_pass_filter(4000)  # Reduce high-frequency noise
+
+        wav_io = BytesIO()
+        audio.export(wav_io, format="wav")
+        wav_io.seek(0)
+
+        # Read WAV data
+        wf = wave.open(wav_io, "rb")
+        if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() != 16000:
+            raise ValueError("Audio must be mono PCM WAV at 16kHz.")
+
+        # Enable more tolerant settings
+        rec = KaldiRecognizer(self.model, wf.getframerate())
+        rec.SetWords(True)  # Enable word-level details
+        rec.SetMaxAlternatives(max_alternatives)  # Get alternatives if > 0
+
+        result_text = ""
+        while True:
+            data = wf.readframes(4000)
+            if not data:
+                break
+            if rec.AcceptWaveform(data):
+                result = json.loads(rec.Result())
+                result_text += result.get("text", "") + " "
+
+        final_result = json.loads(rec.FinalResult())
+        result_text += final_result.get("text", "")
+
+        # Optional: Post-process text (spell check, etc.)
+        # result_text = self._post_process(result_text)
+
+        return result_text.strip()
