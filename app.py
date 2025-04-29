@@ -6,6 +6,10 @@ from LLM_base import EnPipeline, FaSummarizationPipeline, FaQA_Pipeline
 from flasgger import Swagger
 from event import process_event_file 
 from flask_cors import CORS
+from STT import SpeechToText
+
+ALLOWED_AUDIO_EXTENSIONS = {'mp3'}
+ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
 
 app = Flask(__name__)
 swagger = Swagger(app)  
@@ -15,10 +19,11 @@ en_pipeline = EnPipeline()
 fa_summarizer = FaSummarizationPipeline()
 fa_qa = FaQA_Pipeline()
 
-ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
-
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+def allowed_audio_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_AUDIO_EXTENSIONS
+
 
 @app.route('/api/summarize', methods=['POST'])
 def summarize_text():
@@ -177,6 +182,67 @@ def process_event_report():
 
     except Exception as e:
         return jsonify({"error": f"Failed to process event file: {str(e)}"}), 500
+
+@app.route('/api/transcribe', methods=['POST'])
+def transcribe_audio():
+    """
+    Transcribe an uploaded MP3 audio file to text
+    ---
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: file
+        in: formData
+        type: file
+        required: true
+        description: The MP3 audio file to transcribe
+      - name: lang
+        in: formData
+        type: string
+        enum: [en, fa]
+        required: true
+        description: Language of the audio (English or Persian)
+    responses:
+      200:
+        description: Transcribed text from the audio
+        schema:
+          type: object
+          properties:
+            transcription:
+              type: string
+      400:
+        description: Bad Request
+      500:
+        description: Internal Server Error
+    """
+    if 'file' not in request.files or 'lang' not in request.form:
+        return jsonify({"error": "Missing 'file' or 'lang' field"}), 400
+
+    file = request.files['file']
+    lang = request.form['lang']
+
+    if file.filename == '' or not allowed_audio_file(file.filename):
+        return jsonify({"error": "Invalid file type. Only MP3 is supported."}), 400
+
+    if lang not in ['en', 'fa']:
+        return jsonify({"error": "Invalid language. Use 'en' or 'fa'"}), 400
+
+    filename = secure_filename(file.filename)
+    file_path = os.path.join("/tmp", filename)
+    file.save(file_path)
+
+    try:
+        stt = SpeechToText(lang=lang)
+        with open(file_path, "rb") as f:
+            transcription = stt.transcribe_mp3_fileobj(f)
+        return jsonify({"transcription": transcription}), 200
+    except Exception as e:
+        return jsonify({"error": f"Transcription failed: {str(e)}"}), 500
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)  
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
