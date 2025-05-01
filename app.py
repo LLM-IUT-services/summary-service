@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import os
+import uuid
 import pandas as pd
 from werkzeug.utils import secure_filename
 from LLM_base import EnPipeline, FaSummarizationPipeline, FaQA_Pipeline
@@ -8,7 +9,7 @@ from event import process_event_file
 from flask_cors import CORS
 from STT import SpeechToText
 
-ALLOWED_AUDIO_EXTENSIONS = {'mp3'}
+ALLOWED_AUDIO_EXTENSIONS = {'mp3','wav'}
 ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
 
 app = Flask(__name__)
@@ -227,14 +228,18 @@ def transcribe_audio():
     if lang not in ['en', 'fa']:
         return jsonify({"error": "Invalid language. Use 'en' or 'fa'"}), 400
 
-    filename = secure_filename(file.filename)
+    unique_id = uuid.uuid4().hex
+    filename = f"{unique_id}_{secure_filename(file.filename)}"
     file_path = os.path.join("/tmp", filename)
     file.save(file_path)
 
     try:
         stt = SpeechToText(lang=lang)
         with open(file_path, "rb") as f:
-            transcription = stt.transcribe_mp3_fileobj(f)
+            if file_path.endswith(".wav"):
+              transcription = stt.transcribe_wav_fileobj(f)
+            else: 
+              transcription = stt.transcribe_mp3_fileobj(f)
         return jsonify({"transcription": transcription}), 200
     except Exception as e:
         return jsonify({"error": f"Transcription failed: {str(e)}"}), 500

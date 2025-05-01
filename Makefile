@@ -14,11 +14,11 @@ install:
 	@echo "[+] Activating virtual environment and installing requirements..."
 	@$(VENV_DIR)/bin/pip install --upgrade pip
 	@$(VENV_DIR)/bin/pip install -r requirements.txt
-	@mkdir -p /models/fa 
-	@mkdir -p /models/en 
+	@mkdir -p models/fa 
+	@mkdir -p models/en 
 	@wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip  
 	@wget https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip 
-	@unzip vosk-model-small-fa-0.42.zip -d models/fa/ 
+	@unzip vosk-model-small-fa-0.42.zip -d models/fa/
 	@unzip vosk-model-small-en-us-0.15.zip -d models/en/
 	@rm  vosk-model-small-fa-0.42.zip vosk-model-small-en-us-0.15.zip
 	@$(VENV_DIR)/bin/huggingface-cli login --token $(HUGGINGFACE_API_KEY)
@@ -26,6 +26,10 @@ install:
 run:
 	@echo "[+] Running the application..."
 	$(VENV_DIR)/bin/python app.py
+
+run-threaded:
+	@echo "[+] Running the application with threads ..."
+	@venv/bin/gunicorn -w 1 --threads 4 -b 0.0.0.0:5000 app:app
 
 .PHONY: test
 # Run tests with pytest
@@ -41,7 +45,8 @@ clean:
 
 help:
 	@echo "Available commands:"
-	@echo "  make install   - Install dependencies and setup virtual environment using Python 3.12"
-	@echo "  make run       - Run the Flask application"
-	@echo "  make test      - Run tests with pytest"
-	@echo "  make clean     - Remove virtual environment and cache files"
+	@echo "  make run-threaded - Run but with threads"
+	@echo "  make install      - Install dependencies and setup virtual environment using Python 3.12"
+	@echo "  make run          - Run the Flask application"
+	@echo "  make test         - Run tests with pytest"
+	@echo "  make clean        - Remove virtual environment and cache files"

@@ -13,4 +13,5 @@ sentencepiece
 vosk
 sounddevice
 pydub
+gunicorn
 --extra-index-url https://download.pytorch.org/whl/cpu

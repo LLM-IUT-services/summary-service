@@ -10,6 +10,7 @@ It can also apply some basic audio enhancements.
 >>> print(text)
 """
 
+import gc
 import os
 import wave
 import json
@@ -33,9 +34,50 @@ class SpeechToText:
 
         self.model = Model(model_dir)
 
+    def transcribe_wav_fileobj(self, file_obj, max_alternatives: int = 0) -> str:
+        # Read WAV file-like object and ensure mono PCM @ 16kHz
+        audio = AudioSegment.from_file(file_obj, format="wav")
+        audio = audio.set_channels(1).set_frame_rate(16000)
+
+        # Optional: Enhance audio
+        audio = audio.normalize()
+        audio = audio.low_pass_filter(4000)
+
+        # Export to WAV in-memory for Vosk
+        wav_io = BytesIO()
+        audio.export(wav_io, format="wav")
+        wav_io.seek(0)
+
+        # Validate WAV format for Vosk
+        wf = wave.open(wav_io, "rb")
+        if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() != 16000:
+            raise ValueError("Audio must be mono PCM WAV at 16kHz.")
+
+        # Initialize recognizer
+        rec = KaldiRecognizer(self.model, wf.getframerate())
+        rec.SetWords(True)
+        rec.SetMaxAlternatives(max_alternatives)
+
+        # Transcribe
+        result_text = ""
+        while True:
+            data = wf.readframes(4000)
+            if not data:
+                break
+            if rec.AcceptWaveform(data):
+                result = json.loads(rec.Result())
+                result_text += result.get("text", "") + " "
+
+        final_result = json.loads(rec.FinalResult())
+        result_text += final_result.get("text", "")
+        del audio, wav_io, wf, rec
+        gc.collect()
+
+        return result_text.strip()
+
     def transcribe_mp3_fileobj(self, file_obj, max_alternatives: int = 0) -> str:
         # Convert MP3 file-like object to WAV in memory
-        audio = AudioSegment.from_file(file_obj, format="mp3")
+        audio = AudioSegment.from_file(file_obj, format="wav")
         audio = audio.set_channels(1).set_frame_rate(16000)
 
         # Optional: Apply audio enhancements (normalization, noise reduction)
